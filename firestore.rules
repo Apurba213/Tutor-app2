@@ -1,0 +1,138 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global safety net: deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Common helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || existing().email == request.auth.token.email);
+      allow list: if false; // Deny lists for privacy
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId && isValidUser(incoming()) && (incoming().role == existing().role);
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'displayName', 'role', 'createdAt'])
+        && data.keys().size() == 5
+        && data.uid is string && data.uid.size() <= 128
+        && data.email is string && data.email.size() <= 128
+        && data.displayName is string && data.displayName.size() <= 128
+        && data.role is string && (data.role == 'tutor' || data.role == 'parent')
+        && data.createdAt is timestamp;
+    }
+
+    // Students Collection
+    match /students/{studentId} {
+      allow get: if isSignedIn() && (resource.data.tutorUid == request.auth.uid || resource.data.parentEmail == request.auth.token.email);
+      allow list: if isSignedIn() && (resource.data.tutorUid == request.auth.uid || resource.data.parentEmail == request.auth.token.email);
+      allow create: if isSignedIn() && isValidId(studentId) && incoming().tutorUid == request.auth.uid && isValidStudent(incoming());
+      allow update: if isSignedIn() && isValidId(studentId) && existing().tutorUid == request.auth.uid && incoming().tutorUid == request.auth.uid && isValidStudent(incoming());
+      allow delete: if isSignedIn() && isValidId(studentId) && existing().tutorUid == request.auth.uid;
+    }
+
+    function isValidStudent(data) {
+      return data.keys().hasAll(['id', 'name', 'grade', 'subjects', 'address', 'parentEmail', 'tutorUid', 'salaryAmount', 'salaryDueDate', 'createdAt'])
+        && data.keys().size() == 10
+        && data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.grade is string && data.grade.size() <= 50
+        && data.subjects is list && data.subjects.size() <= 20
+        && data.address is string && data.address.size() <= 300
+        && data.parentEmail is string && data.parentEmail.size() <= 128
+        && data.tutorUid is string && data.tutorUid.size() <= 128
+        && data.salaryAmount is int && data.salaryAmount >= 0
+        && data.salaryDueDate is int && data.salaryDueDate >= 1 && data.salaryDueDate <= 31
+        && data.createdAt is timestamp;
+    }
+
+    // Attendance Collection
+    match /attendance/{attendanceId} {
+      allow get: if isSignedIn() && (resource.data.tutorUid == request.auth.uid || isParentOfStudent(resource.data.studentId));
+      allow list: if isSignedIn() && (resource.data.tutorUid == request.auth.uid || isParentOfStudent(resource.data.studentId));
+      allow create: if isSignedIn() && isValidId(attendanceId) && incoming().tutorUid == request.auth.uid && isValidAttendance(incoming());
+      allow update: if isSignedIn() && isValidId(attendanceId) && existing().tutorUid == request.auth.uid && incoming().tutorUid == request.auth.uid && isValidAttendance(incoming());
+      allow delete: if isSignedIn() && isValidId(attendanceId) && existing().tutorUid == request.auth.uid;
+    }
+
+    function isParentOfStudent(studentId) {
+      return get(/databases/$(database)/documents/students/$(studentId)).data.parentEmail == request.auth.token.email;
+    }
+
+    function isValidAttendance(data) {
+      return data.keys().hasAll(['id', 'studentId', 'date', 'status', 'tutorUid', 'createdAt'])
+        && data.keys().size() == 6
+        && data.id is string && data.id.size() <= 128
+        && data.studentId is string && data.studentId.size() <= 128
+        && data.date is string && data.date.size() == 10
+        && data.status is string && (data.status == 'present' || data.status == 'absent' || data.status == 'late')
+        && data.tutorUid is string && data.tutorUid.size() <= 128
+        && data.createdAt is timestamp;
+    }
+
+    // Salaries/Payments Collection
+    match /salaries/{salaryId} {
+      allow get: if isSignedIn() && (resource.data.tutorUid == request.auth.uid || resource.data.parentEmail == request.auth.token.email);
+      allow list: if isSignedIn() && (resource.data.tutorUid == request.auth.uid || resource.data.parentEmail == request.auth.token.email);
+      allow create: if isSignedIn() && isValidId(salaryId) && incoming().tutorUid == request.auth.uid && isValidSalary(incoming());
+      allow update: if isSignedIn() && isValidId(salaryId) && existing().tutorUid == request.auth.uid && incoming().tutorUid == request.auth.uid && isValidSalary(incoming());
+      allow delete: if isSignedIn() && isValidId(salaryId) && existing().tutorUid == request.auth.uid;
+    }
+
+    function isValidSalary(data) {
+      return data.keys().hasAll(['id', 'studentId', 'month', 'amount', 'status', 'paidAt', 'tutorUid', 'parentEmail'])
+        && data.keys().size() == 8
+        && data.id is string && data.id.size() <= 128
+        && data.studentId is string && data.studentId.size() <= 128
+        && data.month is string && data.month.size() == 7
+        && data.amount is int && data.amount >= 0
+        && data.status is string && (data.status == 'paid' || data.status == 'pending')
+        && (data.paidAt == null || data.paidAt is timestamp)
+        && data.tutorUid is string && data.tutorUid.size() <= 128
+        && data.parentEmail is string && data.parentEmail.size() <= 128;
+    }
+
+    // Tutor Profiles Collection
+    match /tutorProfiles/{tutorId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && tutorId == request.auth.uid && incoming().tutorUid == request.auth.uid && isValidTutorProfile(incoming());
+      allow update: if isSignedIn() && tutorId == request.auth.uid && incoming().tutorUid == request.auth.uid && isValidTutorProfile(incoming());
+      allow delete: if isSignedIn() && tutorId == request.auth.uid;
+    }
+
+    function isValidTutorProfile(data) {
+      return data.keys().hasAll(['tutorUid', 'name', 'phone', 'email', 'qualification', 'experience', 'subjects', 'bio', 'updatedAt'])
+        && data.keys().size() == 9
+        && data.tutorUid is string && data.tutorUid.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.phone is string && data.phone.size() <= 30
+        && data.email is string && data.email.size() <= 128
+        && data.qualification is string && data.qualification.size() <= 200
+        && data.experience is string && data.experience.size() <= 100
+        && data.subjects is list && data.subjects.size() <= 30
+        && data.bio is string && data.bio.size() <= 2000
+        && data.updatedAt is timestamp;
+    }
+  }
+}

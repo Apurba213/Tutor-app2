@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Information about a registered tutor or parent user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique Firebase user ID" },
+        "email": { "type": "string", "description": "Email address of the user" },
+        "displayName": { "type": "string", "description": "The full name of the user" },
+        "role": { "type": "string", "enum": ["tutor", "parent"], "description": "User role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "User creation time" }
+      },
+      "required": ["uid", "email", "role"]
+    },
+    "Student": {
+      "title": "Student",
+      "description": "Details of the student receiving tutoring",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "grade": { "type": "string" },
+        "subjects": { "type": "array" },
+        "address": { "type": "string" },
+        "parentEmail": { "type": "string", "description": "Used to link this student to parent account" },
+        "tutorUid": { "type": "string", "description": "UID of the tutor" },
+        "salaryAmount": { "type": "integer" },
+        "salaryDueDate": { "type": "integer", "description": "Day of the month for salary payment" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "tutorUid", "parentEmail", "salaryAmount"]
+    },
+    "Attendance": {
+      "title": "Attendance Log",
+      "description": "Daily record of tuition sessions and attendance statuses",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "date": { "type": "string", "description": "YYYY-MM-DD format" },
+        "status": { "type": "string", "enum": ["present", "absent", "late"] },
+        "tutorUid": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "studentId", "date", "status", "tutorUid"]
+    },
+    "Salary": {
+      "title": "Salary Payment",
+      "description": "Invoices/payments for the tutoring sessions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "studentId": { "type": "string" },
+        "month": { "type": "string", "description": "YYYY-MM" },
+        "amount": { "type": "integer" },
+        "status": { "type": "string", "enum": ["paid", "pending"] },
+        "paidAt": { "type": "string", "format": "date-time" },
+        "tutorUid": { "type": "string" },
+        "parentEmail": { "type": "string" }
+      },
+      "required": ["id", "studentId", "month", "amount", "status", "tutorUid", "parentEmail"]
+    },
+    "TutorProfile": {
+      "title": "Tutor Profile",
+      "description": "Detailed tutor info that is shared with linked parents",
+      "type": "object",
+      "properties": {
+        "tutorUid": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "email": { "type": "string" },
+        "qualification": { "type": "string" },
+        "experience": { "type": "string" },
+        "subjects": { "type": "array" },
+        "bio": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["tutorUid", "name", "email"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Top-level collection of users indexed by their Auth UID"
+    },
+    "students/{studentId}": {
+      "schema": "Student",
+      "description": "Top-level collection for students tracked by tutors"
+    },
+    "attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Attendance logs indexed by customized composite/unique IDs"
+    },
+    "salaries/{salaryId}": {
+      "schema": "Salary",
+      "description": "Tuition salary payments"
+    },
+    "tutorProfiles/{tutorId}": {
+      "schema": "TutorProfile",
+      "description": "Public profile data of tutors"
+    }
+  }
+}
