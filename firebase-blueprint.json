@@ -26,8 +26,10 @@
         "parentEmail": { "type": "string", "description": "Used to link this student to parent account" },
         "tutorUid": { "type": "string", "description": "UID of the tutor" },
         "salaryAmount": { "type": "integer" },
-        "salaryDueDate": { "type": "integer", "description": "Day of the month for salary payment" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "tutoringDays": { "type": "array", "description": "Tutoring days of the week" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "contactInfo": { "type": "string", "description": "Contact info of the student" },
+        "progressNotes": { "type": "string", "description": "Tutor notes about student progress" }
       },
       "required": ["id", "name", "tutorUid", "parentEmail", "salaryAmount"]
     },
@@ -39,7 +41,8 @@
         "id": { "type": "string" },
         "studentId": { "type": "string" },
         "date": { "type": "string", "description": "YYYY-MM-DD format" },
-        "status": { "type": "string", "enum": ["present", "absent", "late"] },
+        "status": { "type": "string", "enum": ["present", "absent", "holiday", "took_off", "gap_covered"] },
+        "gapCoveredDate": { "type": "string", "description": "YYYY-MM-DD optional gap date covered" },
         "tutorUid": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       },
@@ -56,6 +59,7 @@
         "amount": { "type": "integer" },
         "status": { "type": "string", "enum": ["paid", "pending"] },
         "paidAt": { "type": "string", "format": "date-time" },
+        "receivedDate": { "type": "string", "description": "Date the payment was received" },
         "tutorUid": { "type": "string" },
         "parentEmail": { "type": "string" }
       },

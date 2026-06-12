@@ -17,7 +17,7 @@ export interface Student {
   parentEmail: string;
   tutorUid: string;
   salaryAmount: number;
-  salaryDueDate: number; // Day of month: 1 - 31
+  tutoringDays: string[]; // e.g. ['Sun', 'Tue', 'Thu']
   createdAt: Date;
   contactInfo?: string;
   progressNotes?: string;
@@ -27,7 +27,8 @@ export interface Attendance {
   id: string;
   studentId: string;
   date: string; // YYYY-MM-DD
-  status: 'present' | 'absent' | 'late';
+  status: 'present' | 'absent' | 'holiday' | 'took_off' | 'gap_covered';
+  gapCoveredDate?: string; // YYYY-MM-DD
   tutorUid: string;
   createdAt: Date;
 }
@@ -39,6 +40,7 @@ export interface Salary {
   amount: number;
   status: 'paid' | 'pending';
   paidAt: Date | null;
+  receivedDate?: string; // YYYY-MM-DD or custom payment date
   tutorUid: string;
   parentEmail: string;
 }

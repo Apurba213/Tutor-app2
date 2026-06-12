@@ -1,5 +1,5 @@
 {
-  "name": "Home Tutoring Tracker",
+  "name": "Tutor's Book",
   "description": "A comprehensive home tutoring management app with dedicated dashboards for Tutors and Parents to track attendance, salary payments, student progress, and monthly reports.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

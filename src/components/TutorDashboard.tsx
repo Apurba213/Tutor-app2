@@ -40,6 +40,20 @@ interface TutorDashboardProps {
   onSignOut: () => void;
 }
 
+const formatMonthName = (ym: string): string => {
+  if (!ym || ym.length !== 7) return ym;
+  const [year, month] = ym.split('-');
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const mIndex = parseInt(month, 10) - 1;
+  if (mIndex >= 0 && mIndex < 12) {
+    return `${months[mIndex]} ${year}`;
+  }
+  return ym;
+};
+
 export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps) {
   const [activeTab, setActiveTab] = useState<'students' | 'attendance' | 'salaries' | 'reports' | 'profile'>('students');
   const [students, setStudents] = useState<Student[]>([]);
@@ -48,6 +62,10 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
   const [tutorProfile, setTutorProfile] = useState<TutorProfile | null>(null);
   
   const [isLoading, setIsLoading] = useState(true);
+
+  // Focus states for Month Attendance Report
+  const [focusStudentId, setFocusStudentId] = useState<string>('');
+  const [focusMonth, setFocusMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
   // Deletion States
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -89,7 +107,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
   const [studAddress, setStudAddress] = useState('');
   const [studParentEmail, setStudParentEmail] = useState('');
   const [studSalary, setStudSalary] = useState('');
-  const [studDueDate, setStudDueDate] = useState('5');
+  const [studTutoringDays, setStudTutoringDays] = useState<string[]>([]);
   const [studContactInfo, setStudContactInfo] = useState('');
   const [studProgressNotes, setStudProgressNotes] = useState('');
   const [studentError, setStudentError] = useState('');
@@ -104,7 +122,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
   const [editStudAddress, setEditStudAddress] = useState('');
   const [editStudParentEmail, setEditStudParentEmail] = useState('');
   const [editStudSalary, setEditStudSalary] = useState('');
-  const [editStudDueDate, setEditStudDueDate] = useState('');
+  const [editStudTutoringDays, setEditStudTutoringDays] = useState<string[]>([]);
   const [editStudContactInfo, setEditStudContactInfo] = useState('');
   const [editStudProgressNotes, setEditStudProgressNotes] = useState('');
   const [editStudentSuccess, setEditStudentSuccess] = useState('');
@@ -119,7 +137,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
     setEditStudAddress(std.address);
     setEditStudParentEmail(std.parentEmail);
     setEditStudSalary(String(std.salaryAmount));
-    setEditStudDueDate(String(std.salaryDueDate));
+    setEditStudTutoringDays(std.tutoringDays || []);
     setEditStudContactInfo(std.contactInfo || '');
     setEditStudProgressNotes(std.progressNotes || '');
     setEditStudentSuccess('');
@@ -131,8 +149,15 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
     const today = new Date();
     return today.toISOString().split('T')[0];
   });
-  const [attendanceStatusMap, setAttendanceStatusMap] = useState<{[studentId: string]: 'present' | 'absent' | 'late'}>({});
+  const [attendanceStatusMap, setAttendanceStatusMap] = useState<{[studentId: string]: 'present' | 'absent' | 'holiday' | 'took_off' | 'gap_covered'}>({});
+  const [attendanceGapDateMap, setAttendanceGapDateMap] = useState<{[studentId: string]: string}>({});
   const [attendanceSuccess, setAttendanceSuccess] = useState('');
+
+  // Attendance Edit/Delete States
+  const [editingAttendance, setEditingAttendance] = useState<Attendance | null>(null);
+  const [editAttendanceStatus, setEditAttendanceStatus] = useState<'present' | 'absent' | 'holiday' | 'took_off' | 'gap_covered'>('present');
+  const [editAttendanceGapDate, setEditAttendanceGapDate] = useState('');
+  const [isSavingEditAttendance, setIsSavingEditAttendance] = useState(false);
 
   // Salaries Form
   const [salaryMonth, setSalaryMonth] = useState(() => {
@@ -163,7 +188,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
       setStudents(studentList);
 
       // Initialize default attendances for today
-      const defaultMap: {[studentId: string]: 'present' | 'absent' | 'late'} = {};
+      const defaultMap: {[studentId: string]: 'present' | 'absent' | 'holiday' | 'took_off' | 'gap_covered'} = {};
       studentList.forEach(s => {
         defaultMap[s.id] = 'present';
       });
@@ -239,7 +264,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
       parentEmail: matchedEmail,
       tutorUid: user.uid,
       salaryAmount: parseInt(studSalary) || 0,
-      salaryDueDate: parseInt(studDueDate) || 5,
+      tutoringDays: studTutoringDays,
       createdAt: new Date(),
       contactInfo: studContactInfo.trim(),
       progressNotes: studProgressNotes.trim()
@@ -262,7 +287,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
       setStudAddress('');
       setStudParentEmail('');
       setStudSalary('');
-      setStudDueDate('5');
+      setStudTutoringDays([]);
       setStudContactInfo('');
       setStudProgressNotes('');
     } catch (err) {
@@ -306,7 +331,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
       address: editStudAddress.trim() || 'Not Specified',
       parentEmail: editStudParentEmail.toLowerCase().trim(),
       salaryAmount: parseInt(editStudSalary) || 0,
-      salaryDueDate: parseInt(editStudDueDate) || 5,
+      tutoringDays: editStudTutoringDays,
       contactInfo: editStudContactInfo.trim(),
       progressNotes: editStudProgressNotes.trim()
     };
@@ -343,14 +368,18 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
 
       students.forEach(s => {
         const uniqueId = `att_${s.id}_${attendanceDate}`;
+        const statusVal = attendanceStatusMap[s.id] || 'present';
         const newLog: Attendance = {
           id: uniqueId,
           studentId: s.id,
           date: attendanceDate,
-          status: attendanceStatusMap[s.id] || 'present',
+          status: statusVal,
           tutorUid: user.uid,
           createdAt: new Date()
         };
+        if (statusVal === 'gap_covered' && attendanceGapDateMap[s.id]) {
+          newLog.gapCoveredDate = attendanceGapDateMap[s.id];
+        }
         newLogs.push(newLog);
 
         const logRef = doc(db, 'attendance', uniqueId);
@@ -371,6 +400,53 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
       setAttendanceSuccess(`Successfully recorded attendance for ${attendanceDate}!`);
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'attendance_batch');
+    }
+  };
+
+  const handleDeleteAttendance = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this attendance record? This will instantly remove it from the parent view.')) return;
+    try {
+      await deleteDoc(doc(db, 'attendance', id));
+      setAttendances(prev => prev.filter(a => a.id !== id));
+      setAttendanceSuccess('Attendance record deleted successfully.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `attendance/${id}`);
+    }
+  };
+
+  const handleStartEditAttendance = (att: Attendance) => {
+    setEditingAttendance(att);
+    setEditAttendanceStatus(att.status);
+    setEditAttendanceGapDate(att.gapCoveredDate || '');
+  };
+
+  const handleSaveEditAttendanceChanges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAttendance) return;
+    setIsSavingEditAttendance(true);
+    try {
+      const updatedRecord: Attendance = {
+        ...editingAttendance,
+        status: editAttendanceStatus,
+      };
+      if (editAttendanceStatus === 'gap_covered') {
+        updatedRecord.gapCoveredDate = editAttendanceGapDate;
+      } else {
+        delete updatedRecord.gapCoveredDate;
+      }
+
+      await setDoc(doc(db, 'attendance', editingAttendance.id), {
+        ...updatedRecord,
+        createdAt: editingAttendance.createdAt || new Date()
+      }, { merge: true });
+
+      setAttendances(prev => prev.map(a => a.id === editingAttendance.id ? updatedRecord : a));
+      setEditingAttendance(null);
+      setAttendanceSuccess('Updated attendance entry successfully!');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `attendance/${editingAttendance.id}`);
+    } finally {
+      setIsSavingEditAttendance(false);
     }
   };
 
@@ -424,18 +500,37 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
   const toggleSalaryStatus = async (sal: Salary) => {
     const updatedStatus: 'paid' | 'pending' = sal.status === 'paid' ? 'pending' : 'paid';
     const updatedPaidAt = updatedStatus === 'paid' ? new Date() : null;
+    const updatedReceivedDate = updatedStatus === 'paid' ? new Date().toISOString().split('T')[0] : '';
 
     try {
       await setDoc(doc(db, 'salaries', sal.id), {
         ...sal,
         status: updatedStatus,
-        paidAt: updatedPaidAt
+        paidAt: updatedPaidAt,
+        receivedDate: updatedReceivedDate
       }, { merge: true });
 
       setSalaries(prev => prev.map(s => s.id === sal.id ? {
         ...s,
         status: updatedStatus,
-        paidAt: updatedPaidAt
+        paidAt: updatedPaidAt,
+        receivedDate: updatedReceivedDate
+      } : s));
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `salaries/${sal.id}`);
+    }
+  };
+
+  const updateSalaryReceivedDate = async (sal: Salary, dateStr: string) => {
+    try {
+      await setDoc(doc(db, 'salaries', sal.id), {
+        ...sal,
+        receivedDate: dateStr
+      }, { merge: true });
+
+      setSalaries(prev => prev.map(s => s.id === sal.id ? {
+        ...s,
+        receivedDate: dateStr
       } : s));
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `salaries/${sal.id}`);
@@ -477,7 +572,14 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
     const records = attendances.filter(a => a.date.startsWith(salaryMonth));
     const totalAttendSessions = records.length;
     const presentSessions = records.filter(a => a.status === 'present').length;
-    const lateSessions = records.filter(a => a.status === 'late').length;
+    const absentSessions = records.filter(a => a.status === 'absent').length;
+    const holidaySessions = records.filter(a => a.status === 'holiday').length;
+    const tookOffSessions = records.filter(a => a.status === 'took_off').length;
+    const gapCoveredSessions = records.filter(a => a.status === 'gap_covered').length;
+
+    const totalTaken = presentSessions + gapCoveredSessions;
+    const gapClasses = absentSessions + tookOffSessions;
+    const coveredClasses = gapCoveredSessions;
     
     // Total income for current month
     const currentSalaries = salaries.filter(s => s.month === salaryMonth);
@@ -487,10 +589,16 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
     return {
       totalAttendSessions,
       presentSessions,
-      lateSessions,
+      absentSessions,
+      holidaySessions,
+      tookOffSessions,
+      gapCoveredSessions,
+      totalTaken,
+      gapClasses,
+      coveredClasses,
       earnedIncome,
       pendingIncome,
-      attendanceRate: totalAttendSessions > 0 ? Math.round(((presentSessions + lateSessions / 2) / totalAttendSessions) * 100) : 100
+      attendanceRate: totalAttendSessions > 0 ? Math.round(((presentSessions + gapCoveredSessions) / totalAttendSessions) * 100) : 100
     };
   };
 
@@ -505,18 +613,20 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
     text += `==================================================\n\n`;
     text += `Tutor Name: ${user.displayName || 'Authorized Tutor'}\n`;
     text += `Tutor Email: ${user.email}\n`;
-    text += `Report Month: ${salaryMonth}\n`;
+    text += `Report Month: ${formatMonthName(salaryMonth)}\n`;
     text += `Generated At: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}\n\n`;
     
     text += `--------------------------------------------------\n`;
     text += `METRICS & PERFORMANCE INSIGHTS\n`;
     text += `--------------------------------------------------\n`;
     text += `Overall Attendance Rating  : ${data.attendanceRate}%\n`;
-    text += `Total Booked Sessions      : ${data.totalAttendSessions}\n`;
-    text += `Total Marked Present       : ${data.presentSessions}\n`;
-    text += `Total Marked Late          : ${data.lateSessions}\n`;
-    text += `Tuition Salaries Received  : $${data.earnedIncome}\n`;
-    text += `Tuition Salaries Pending   : $${data.pendingIncome}\n`;
+    text += `Total Logged Sessions      : ${data.totalAttendSessions}\n`;
+    text += `Total Taken Classes        : ${data.totalTaken}\n`;
+    text += `Total Gap Classes          : ${data.gapClasses}\n`;
+    text += `Total Covered Classes      : ${data.coveredClasses}\n`;
+    text += `Total Holiday Sessions     : ${data.holidaySessions}\n`;
+    text += `Tuition Salaries Received  : ${data.earnedIncome} BDT\n`;
+    text += `Tuition Salaries Pending   : ${data.pendingIncome} BDT\n`;
     text += `Active Subjects Covered    : ${activeSubjects.join(', ') || 'No Listed Subjects'}\n\n`;
     
     text += `--------------------------------------------------\n`;
@@ -529,7 +639,9 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
       students.forEach((std) => {
         const studentAttendances = attendances.filter(a => a.studentId === std.id && a.date.startsWith(salaryMonth));
         const pC = studentAttendances.filter(a => a.status === 'present').length;
-        const lC = studentAttendances.filter(a => a.status === 'late').length;
+        const hC = studentAttendances.filter(a => a.status === 'holiday').length;
+        const tC = studentAttendances.filter(a => a.status === 'took_off').length;
+        const gC = studentAttendances.filter(a => a.status === 'gap_covered').length;
         const aC = studentAttendances.filter(a => a.status === 'absent').length;
         const invoice = salaries.find(sal => sal.studentId === std.id && sal.month === salaryMonth);
         
@@ -538,15 +650,15 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
         text += `- Class / Grade Level    : ${std.grade}\n`;
         text += `- Active Subjects        : ${std.subjects.join(', ') || 'No active subjects'}\n`;
         text += `- Home Session Address   : ${std.address}\n`;
-        text += `- Attendance Breakdown   : Present: ${pC} | Late: ${lC} | Absent: ${aC} (Total: ${studentAttendances.length})\n`;
-        text += `- Tally Fee Structure    : $${std.salaryAmount} / month (${invoice?.status || 'no invoice generated'})\n`;
+        text += `- Attendance Breakdown   : Present: ${pC} | Gap/Absent: ${aC} | Student Took Off: ${tC} | Holiday: ${hC} | Covered Gap: ${gC} (Total: ${studentAttendances.length})\n`;
+        text += `- Tally Fee Structure    : ${std.salaryAmount} BDT / month (${invoice?.status || 'no invoice generated'})\n`;
         text += `- Academic Progress Notes: ${std.progressNotes || 'No progress reports submitted for this student yet.'}\n`;
         text += `--------------------------------------------------\n`;
       });
     }
     
     text += `\n==================================================\n`;
-    text += `          END OF TUTORCONNECT REPORT FILE         \n`;
+    text += `          END OF TUTORS BOOK REPORT FILE          \n`;
     text += `==================================================\n`;
 
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8;' });
@@ -563,7 +675,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-8rem)] gap-4">
         <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-600"></div>
-        <p className="text-sm font-medium text-gray-400 font-mono">Syncing Tutor database from cloud...</p>
+        <p className="text-sm font-medium text-gray-400 font-mono">Loading data...</p>
       </div>
     );
   }
@@ -576,7 +688,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
         <div className="p-6 border-b border-slate-800 bg-slate-950/40">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center font-bold text-white shadow-md shadow-indigo-500/20 transform hover:rotate-6 transition-transform">T</div>
-            <span className="text-white font-display font-bold text-lg tracking-tight">TutorConnect</span>
+            <span className="text-white font-display font-bold text-lg tracking-tight">Tutor's Book</span>
           </div>
         </div>
         
@@ -673,7 +785,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
             {/* Mobile Nav Header */}
             <div className="md:hidden flex items-center gap-2">
               <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center font-bold text-white text-xs shadow-md">T</div>
-              <span className="font-display font-black text-md tracking-tight text-slate-900">TutorConnect</span>
+              <span className="font-display font-black text-md tracking-tight text-slate-900">Tutor's Book</span>
             </div>
             
             <h1 className="hidden md:block text-lg font-display font-extrabold text-slate-900 tracking-tight capitalize">
@@ -682,10 +794,10 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Firebase Active Badge */}
-            <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50/50 text-indigo-700 rounded-full border border-indigo-100/50 text-[10px] font-bold uppercase tracking-wider">
-              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-              <span>Encrypted Cloud Sync</span>
+            {/* Status Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+              <span>Workspace Active</span>
             </div>
             
             {/* Mobile Sign Out Option */}
@@ -736,7 +848,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Averaged Tuition Rate</span>
-                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-600 font-mono mt-2">${students.length > 0 ? Math.round(students.reduce((acc, curr) => acc + curr.salaryAmount, 0) / students.length) : 0}</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-600 font-mono mt-2">৳{students.length > 0 ? Math.round(students.reduce((acc, curr) => acc + curr.salaryAmount, 0) / students.length) : 0}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Marked Registers</span>
@@ -744,7 +856,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Active Month</span>
-                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-650 font-mono mt-2">{salaryMonth}</span>
+                <span className="text-xl sm:text-2xl font-extrabold text-indigo-650 font-sans mt-2">{formatMonthName(salaryMonth)}</span>
               </div>
             </div>
           )}
@@ -762,7 +874,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                 <span className="text-2xl sm:text-3xl font-extrabold text-slate-950 font-mono mt-2">{attendances.length}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Active Children</span>
+                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Active Student</span>
                 <span className="text-2xl sm:text-3xl font-extrabold text-indigo-600 font-mono mt-2">{students.length}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
@@ -777,13 +889,13 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Received Fee Items</span>
                 <span className="text-2xl sm:text-3xl font-extrabold text-emerald-600 font-mono mt-2">
-                  ${salaries.filter(s => s.month === salaryMonth && s.status === 'paid').reduce((a, b) => a + b.amount, 0)}
+                  ৳{salaries.filter(s => s.month === salaryMonth && s.status === 'paid').reduce((a, b) => a + b.amount, 0)}
                 </span>
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Pending Fee Items</span>
                 <span className="text-2xl sm:text-3xl font-extrabold text-amber-500 font-mono mt-2">
-                  ${salaries.filter(s => s.month === salaryMonth && s.status === 'pending').reduce((a, b) => a + b.amount, 0)}
+                  ৳{salaries.filter(s => s.month === salaryMonth && s.status === 'pending').reduce((a, b) => a + b.amount, 0)}
                 </span>
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
@@ -794,7 +906,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Billing Month</span>
-                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-650 font-mono mt-2">{salaryMonth}</span>
+                <span className="text-xl sm:text-2xl font-extrabold text-indigo-650 font-sans mt-2">{formatMonthName(salaryMonth)}</span>
               </div>
             </div>
           )}
@@ -853,20 +965,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label htmlFor="salary-due-date" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Bill Due Day *</label>
-                    <input
-                      id="salary-due-date"
-                      type="number"
-                      min="1"
-                      max="31"
-                      required
-                      value={studDueDate}
-                      onChange={(e) => setStudDueDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-gray-50 border border-gray-255 focus:border-indigo-500 focus:bg-white text-sm rounded-lg outline-none transition-all"
-                    />
-                  </div>
+                <div className="grid grid-cols-1 gap-3">
                   <div>
                     <label htmlFor="parent-email" className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Parent Email *</label>
                     <input
@@ -878,6 +977,35 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                       onChange={(e) => setStudParentEmail(e.target.value)}
                       className="w-full px-3 py-2 bg-gray-50 border border-gray-255 focus:border-indigo-500 focus:bg-white text-sm rounded-lg outline-none transition-all"
                     />
+                  </div>
+                </div>
+
+                <div>
+                  <span className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Weekly Tutoring Days</span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(day => {
+                      const isSelected = studTutoringDays.includes(day);
+                      return (
+                        <button
+                          type="button"
+                          key={day}
+                          onClick={() => {
+                            if (isSelected) {
+                              setStudTutoringDays(prev => prev.filter(d => d !== day));
+                            } else {
+                              setStudTutoringDays(prev => [...prev, day]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                            isSelected
+                              ? 'bg-indigo-600 text-white border-indigo-600'
+                              : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
 
@@ -1010,11 +1138,11 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                       {/* Tuition dues detail */}
                       <div className="mt-4 pt-3.5 border-t border-slate-50 flex items-center justify-between text-xs font-medium">
                         <div className="text-gray-500">
-                          Due day: <strong className="text-slate-800 font-mono">Day {std.salaryDueDate}</strong>
+                          Days: <strong className="text-indigo-605 font-medium">{std.tutoringDays?.join(', ') || 'N/A'}</strong>
                         </div>
                         <div className="text-right">
                           <span className="text-gray-400 font-normal">Salary: </span>
-                          <strong className="text-indigo-600 text-sm font-bold">${std.salaryAmount}</strong>
+                          <strong className="text-indigo-600 text-sm font-bold">৳{std.salaryAmount}</strong>
                         </div>
                       </div>
 
@@ -1078,45 +1206,116 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                           <tr key={std.id} className="hover:bg-slate-50/40">
                             <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">{std.name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-xs text-gray-500">{std.grade}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-center">
-                              <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1 gap-1">
-                                
-                                <button
-                                  type="button"
-                                  onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'present' }))}
-                                  className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
-                                    currentStatus === 'present'
-                                      ? 'bg-emerald-600 text-white shadow-sm'
-                                      : 'text-gray-500 hover:bg-gray-100'
-                                  }`}
-                                >
-                                  Present
-                                </button>
+                            <td className="px-6 py-4 text-center">
+                              <div className="flex flex-col items-center gap-2">
+                                <div className="inline-flex flex-wrap rounded-lg border border-gray-205 bg-gray-50 p-1 gap-1 justify-center">
+                                  
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'present' }))}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                                      currentStatus === 'present'
+                                        ? 'bg-emerald-600 text-white shadow-sm'
+                                        : 'text-gray-505 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    Present
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'absent' }))}
-                                  className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
-                                    currentStatus === 'absent'
-                                      ? 'bg-red-600 text-white shadow-sm'
-                                      : 'text-gray-500 hover:bg-gray-100'
-                                  }`}
-                                >
-                                  Absent
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'absent' }))}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                                      currentStatus === 'absent'
+                                        ? 'bg-red-600 text-white shadow-sm'
+                                        : 'text-gray-505 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    Absent
+                                  </button>
 
-                                <button
-                                  type="button"
-                                  onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'late' }))}
-                                  className={`px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
-                                    currentStatus === 'late'
-                                      ? 'bg-amber-500 text-white shadow-sm'
-                                      : 'text-gray-500 hover:bg-gray-100'
-                                  }`}
-                                >
-                                  Late
-                                </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'holiday' }))}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                                      currentStatus === 'holiday'
+                                        ? 'bg-sky-500 text-white shadow-sm'
+                                        : 'text-gray-505 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    Holiday
+                                  </button>
 
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'took_off' }))}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                                      currentStatus === 'took_off'
+                                        ? 'bg-amber-500 text-white shadow-sm'
+                                        : 'text-gray-505 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    Took Off
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => setAttendanceStatusMap(prev => ({ ...prev, [std.id]: 'gap_covered' }))}
+                                    className={`px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
+                                      currentStatus === 'gap_covered'
+                                        ? 'bg-indigo-600 text-white shadow-sm'
+                                        : 'text-gray-505 hover:bg-gray-100'
+                                    }`}
+                                  >
+                                    Gap Covered
+                                  </button>
+
+                                </div>
+
+                                {/* Custom Gap Covered Absent Date selection */}
+                                {currentStatus === 'gap_covered' && (() => {
+                                  const pastAbsentDates = Array.from(new Set(
+                                    attendances
+                                      .filter(a => a.studentId === std.id && (a.status === 'absent' || a.status === 'took_off'))
+                                      .map(a => a.date)
+                                      .sort((a, b) => b.localeCompare(a)) // show newest first
+                                  ));
+                                  const selectedGapDate = attendanceGapDateMap[std.id] || '';
+
+                                  return (
+                                    <div className="flex flex-col sm:flex-row items-center gap-2 mt-1 animate-in slide-in-from-top-1 duration-200">
+                                      <span className="text-[11px] font-bold text-indigo-650">Which date was absent?</span>
+                                      {pastAbsentDates.length > 0 ? (
+                                        <select
+                                          value={selectedGapDate}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            setAttendanceGapDateMap(prev => ({ ...prev, [std.id]: val }));
+                                          }}
+                                          className="px-2 py-1 bg-white border border-gray-250 rounded-md text-[11px] font-medium outline-none"
+                                        >
+                                          <option value="">-- Choose past absent date --</option>
+                                          {pastAbsentDates.map(dStr => (
+                                            <option key={dStr} value={dStr}>{dStr}</option>
+                                          ))}
+                                          <option value="custom">-- Custom Other Date --</option>
+                                        </select>
+                                      ) : null}
+
+                                      {(pastAbsentDates.length === 0 || selectedGapDate === 'custom' || !pastAbsentDates.includes(selectedGapDate)) && (
+                                        <input
+                                          type="date"
+                                          value={selectedGapDate === 'custom' ? '' : selectedGapDate}
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            setAttendanceGapDateMap(prev => ({ ...prev, [std.id]: val }));
+                                          }}
+                                          className="px-2 py-1 bg-white border border-gray-250 rounded-md text-[11px] font-medium outline-none"
+                                        />
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </div>
                             </td>
                           </tr>
@@ -1142,6 +1341,336 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                   </button>
                 </div>
               </form>
+            )}
+
+            {/* GITHUB CONTRIBUTION GRIDS */}
+            {students.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-slate-100 space-y-6">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900 flex items-center gap-1.5 flex-wrap">
+                    <span>Class Attendance Insights & Activity</span>
+                    <span className="text-[10px] uppercase font-bold text-indigo-700 bg-indigo-50 border border-indigo-150 rounded px-1.5 py-0.5 tracking-wider">GitHub Style</span>
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-1">Status commitment heatmaps mapped for each active student.</p>
+                </div>
+
+                <div className="grid grid-cols-1 gap-6">
+                  {students.map(std => {
+                    const studentLogs = attendances.filter(a => a.studentId === std.id);
+                    
+                    const presentCount = studentLogs.filter(a => a.status === 'present').length;
+                    const absentCount = studentLogs.filter(a => a.status === 'absent').length;
+                    const tookOffCount = studentLogs.filter(a => a.status === 'took_off').length;
+                    const holidayCount = studentLogs.filter(a => a.status === 'holiday').length;
+                    const gapCoveredCount = studentLogs.filter(a => a.status === 'gap_covered').length;
+
+                    const totalTaken = presentCount + gapCoveredCount;
+                    const gapClasses = absentCount + tookOffCount;
+                    const coveredClasses = gapCoveredCount;
+
+                    // Generate rolling 12 weeks (84 days) grid
+                    const daysToRender: { date: string; status?: string }[] = [];
+                    for (let i = 83; i >= 0; i--) {
+                      const d = new Date();
+                      d.setDate(d.getDate() - i);
+                      const dateStr = d.toISOString().split('T')[0];
+                      const attRecord = attendances.find(a => a.studentId === std.id && a.date === dateStr);
+                      daysToRender.push({
+                        date: dateStr,
+                        status: attRecord?.status
+                      });
+                    }
+
+                    return (
+                      <div key={std.id} className="p-5 border border-slate-200 bg-slate-50/50 rounded-2xl flex flex-col xl:flex-row xl:items-center justify-between gap-6">
+                        <div className="shrink-0 space-y-2">
+                          <div>
+                            <span className="text-[11px] font-bold text-indigo-650 tracking-wider uppercase mb-0.5 block">{std.grade}</span>
+                            <h4 className="font-extrabold text-sm text-slate-900">{std.name}</h4>
+                          </div>
+
+                          {/* Stat summary cards */}
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="px-2.5 py-1.5 bg-emerald-50 text-emerald-850 rounded-lg border border-emerald-100">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-emerald-500">Taken</span>
+                              <span className="text-xs font-extrabold font-mono">{totalTaken}</span>
+                            </div>
+                            <div className="px-2.5 py-1.5 bg-rose-50 text-rose-800 rounded-lg border border-rose-100">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-rose-400">Gaps</span>
+                              <span className="text-xs font-extrabold font-mono">{gapClasses}</span>
+                            </div>
+                            <div className="px-2.5 py-1.5 bg-indigo-50 text-indigo-850 rounded-lg border border-indigo-150">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-indigo-400">Covered</span>
+                              <span className="text-xs font-extrabold font-mono">{coveredClasses}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* GitHub Contribution Grid Box */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-end mb-1 text-[9px] text-slate-400 gap-2 select-none">
+                            <span>Less</span>
+                            <span className="w-2.5 h-2.5 rounded-sm bg-gray-200 border border-gray-300"></span>
+                            <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500" title="Present (Taken)"></span>
+                            <span className="w-2.5 h-2.5 rounded-sm bg-indigo-605" title="Covered Gap"></span>
+                            <span className="w-2.5 h-2.5 rounded-sm bg-rose-500" title="Absent (Gap)"></span>
+                            <span className="w-2.5 h-2.5 rounded-sm bg-amber-400" title="Took Off"></span>
+                            <span className="w-2.5 h-2.5 rounded-sm bg-sky-400" title="Holiday"></span>
+                            <span>More</span>
+                          </div>
+
+                          <div className="border border-slate-200 rounded-xl p-3 bg-white">
+                            {/* SVG-free layout using standard columns of week buckets */}
+                            <div className="grid grid-flow-col grid-rows-7 gap-1 overflow-x-auto select-none scrollbar-thin">
+                              {daysToRender.map((day, idx) => {
+                                let bgClass = 'bg-gray-100 border-gray-200/40';
+                                if (day.status === 'present') bgClass = 'bg-emerald-500 border-emerald-600 scale-100';
+                                if (day.status === 'gap_covered') bgClass = 'bg-indigo-650 border-indigo-700 scale-100';
+                                if (day.status === 'absent') bgClass = 'bg-rose-500 border-rose-600 scale-100';
+                                if (day.status === 'took_off') bgClass = 'bg-amber-400 border-amber-500 scale-100';
+                                if (day.status === 'holiday') bgClass = 'bg-sky-400 border-sky-500 scale-100';
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    title={`${day.date}: ${day.status ? day.status.toUpperCase() : 'No session logged'}`}
+                                    className={`w-2 h-2 rounded-[1.5px] border ${bgClass} hover:scale-125 transition-transform duration-100 cursor-pointer`}
+                                  />
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ATTENDANCE RECORDS MANAGEMENT & ACTIONS LIST */}
+            {students.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-slate-100 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Registered Logs History</h3>
+                  <p className="text-xs text-gray-400 mt-1 font-sans">Syncs automatically. Edit or delete logged entries safely.</p>
+                </div>
+
+                {attendances.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-4">No historical logs registered inside database yet.</p>
+                ) : (
+                  <div className="overflow-x-auto border border-gray-200 rounded-xl">
+                    <table className="min-w-full divide-y divide-gray-250 text-sm">
+                      <thead className="bg-gray-50/50">
+                        <tr>
+                          <th className="px-6 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Date</th>
+                          <th className="px-6 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Student Name</th>
+                          <th className="px-6 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Status Status</th>
+                          <th className="px-6 py-2.5 text-left text-[11px] font-bold text-gray-500 uppercase tracking-wider">Metadata / Absent Date</th>
+                          <th className="px-6 py-2.5 text-center text-[11px] font-bold text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white divide-y divide-gray-150">
+                        {attendances
+                          .sort((a, b) => b.date.localeCompare(a.date)) // Newest first
+                          .slice(0, 30) // Show last 30 entries
+                          .map(att => {
+                            const relatedStudent = students.find(s => s.id === att.studentId);
+                            return (
+                              <tr key={att.id} className="hover:bg-slate-50/40 text-xs text-slate-600">
+                                <td className="px-6 py-3 whitespace-nowrap font-mono font-medium text-slate-700">{att.date}</td>
+                                <td className="px-6 py-3 whitespace-nowrap font-bold text-slate-900">{relatedStudent?.name || `ID: ${att.studentId}`}</td>
+                                <td className="px-6 py-3 whitespace-nowrap">
+                                  <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border ${
+                                    att.status === 'present' ? 'bg-emerald-50 text-emerald-805 border-emerald-150' :
+                                    att.status === 'absent' ? 'bg-rose-50 text-rose-800 border-rose-150' :
+                                    att.status === 'holiday' ? 'bg-indigo-50 text-indigo-800 border-indigo-150' :
+                                    att.status === 'took_off' ? 'bg-amber-50 text-amber-800 border-amber-150' :
+                                    'bg-indigo-50 text-indigo-805 border-indigo-150'
+                                  }`}>
+                                    {att.status === 'took_off' ? 'Took Off' : att.status === 'gap_covered' ? 'Gap Covered' : att.status}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-3 whitespace-nowrap text-slate-500">
+                                  {att.status === 'gap_covered' ? (
+                                    <span className="text-[11px]">Covered absent day: <strong className="font-mono text-indigo-700 font-bold bg-indigo-50 px-1.5 py-0.5 rounded">{att.gapCoveredDate || 'Not specified'}</strong></span>
+                                  ) : (
+                                    <span>-</span>
+                                  )}
+                                </td>
+                                <td className="px-6 py-3 whitespace-nowrap text-center">
+                                  <div className="flex items-center justify-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleStartEditAttendance(att)}
+                                      className="px-2.5 py-1 text-[11px] hover:bg-slate-50 text-slate-600 hover:text-indigo-650 font-bold rounded-lg border border-slate-200 cursor-pointer shadow-sm"
+                                    >
+                                      Edit
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteAttendance(att.id)}
+                                      className="px-2.5 py-1 text-[11px] hover:bg-red-50 text-red-500 hover:text-red-700 font-bold rounded-lg border border-red-100 hover:border-red-200 cursor-pointer shadow-sm"
+                                    >
+                                      Delete
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {attendances.length > 30 && (
+                  <p className="text-[10px] text-slate-400 text-center font-mono select-none pt-2">Showing newest 30 log records. All entries sync back live with parents instantly.</p>
+                )}
+              </div>
+            )}
+
+            {/* SEPARATE OPTION FOR VIEWING EACH STUDENT FULL MONTH ATTENDANCE */}
+            {students.length > 0 && (
+              <div className="mt-8 pt-6 border-t border-slate-100 space-y-4">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Student Monthly Attendance Analyzer</h3>
+                  <p className="text-xs text-gray-400 mt-1 font-sans">Select any student and month to calculate exact attendance percentages and view full daily sheets.</p>
+                </div>
+
+                <div className="bg-slate-50 border border-slate-205 rounded-xl p-4 space-y-4">
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Select Student</span>
+                      <select
+                        value={focusStudentId || (students[0]?.id || '')}
+                        onChange={(e) => setFocusStudentId(e.target.value)}
+                        className="px-3 py-1.5 bg-white border border-gray-250 rounded-lg text-xs font-semibold outline-none focus:border-indigo-500"
+                      >
+                        <option value="">-- Choose Student --</option>
+                        {students.map(std => (
+                          <option key={std.id} value={std.id}>{std.name} ({std.grade})</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase">Select Month</span>
+                      <input
+                        type="month"
+                        value={focusMonth}
+                        onChange={(e) => setFocusMonth(e.target.value)}
+                        className="px-3 py-1.5 bg-white border border-gray-255 rounded-lg text-xs font-semibold outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  {(() => {
+                    const activeStdId = focusStudentId || students[0]?.id;
+                    if (!activeStdId) return null;
+
+                    const activeStudentObj = students.find(s => s.id === activeStdId);
+
+                    // Filter logs for this student and this month
+                    const monthLogs = attendances.filter(a => {
+                      return a.studentId === activeStdId && a.date.startsWith(focusMonth);
+                    });
+
+                    const presents = monthLogs.filter(a => a.status === 'present').length;
+                    const gaps = monthLogs.filter(a => a.status === 'absent').length;
+                    const tookOffs = monthLogs.filter(a => a.status === 'took_off').length;
+                    const holidays = monthLogs.filter(a => a.status === 'holiday').length;
+                    const gapCovereds = monthLogs.filter(a => a.status === 'gap_covered').length;
+
+                    const totalLogged = monthLogs.length;
+                    // Formula for percentage: (presents + gapCovereds) / (presents + gaps + tookOffs + gapCovereds) * 100
+                    const denominator = presents + gaps + tookOffs + gapCovereds;
+                    const attendancePercentage = denominator > 0 
+                      ? Math.round(((presents + gapCovereds) / denominator) * 100) 
+                      : 100; // Default to 100% or show '-' if no core days were scheduled
+
+                    return (
+                      <div className="bg-white border border-slate-150/80 rounded-xl p-4 mt-2 space-y-4">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                          <div>
+                            <h4 className="text-sm font-bold text-slate-800">{activeStudentObj?.name}'s Full Month Statistics</h4>
+                            <p className="text-[11px] text-slate-400 mt-0.5 font-sans">Summary data computed for {formatMonthName(focusMonth)}.</p>
+                          </div>
+                          <div className="bg-indigo-50 border border-indigo-150/60 rounded-xl px-4 py-2 text-center">
+                            <span className="block text-[9px] uppercase font-bold tracking-wider text-indigo-505">Attendance Percentage</span>
+                            <span className="text-xl font-black text-indigo-750 font-mono">
+                              {monthLogs.length === 0 ? '—' : `${attendancePercentage}%`}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                          <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-100/60">
+                            <span className="block text-[8px] uppercase tracking-wider font-extrabold text-emerald-555">Presences (Taken)</span>
+                            <span className="text-xs font-mono font-extrabold text-emerald-800">{presents}</span>
+                          </div>
+                          <div className="p-2 bg-indigo-50 rounded-lg border border-indigo-100/60">
+                            <span className="block text-[8px] uppercase tracking-wider font-extrabold text-indigo-555">Gaps Covered</span>
+                            <span className="text-xs font-mono font-extrabold text-indigo-800">{gapCovereds}</span>
+                          </div>
+                          <div className="p-2 bg-rose-50 rounded-lg border border-rose-100/60">
+                            <span className="block text-[8px] uppercase tracking-wider font-extrabold text-rose-555">Absents (Gaps)</span>
+                            <span className="text-xs font-mono font-extrabold text-rose-800">{gaps}</span>
+                          </div>
+                          <div className="p-2 bg-amber-50 rounded-lg border border-amber-100/60">
+                            <span className="block text-[8px] uppercase tracking-wider font-extrabold text-amber-555">Took Off</span>
+                            <span className="text-xs font-mono font-extrabold text-amber-800">{tookOffs}</span>
+                          </div>
+                          <div className="p-2 bg-sky-50 rounded-lg border border-sky-100/60">
+                            <span className="block text-[8px] uppercase tracking-wider font-extrabold text-sky-555">Holidays</span>
+                            <span className="text-xs font-mono font-extrabold text-sky-800">{holidays}</span>
+                          </div>
+                        </div>
+
+                        {monthLogs.length === 0 ? (
+                          <div className="bg-slate-50 text-slate-450 text-xs italic p-6 rounded-lg text-center border border-dashed border-slate-20s">
+                            No attendance logs are registered for this student in {formatMonthName(focusMonth)}. Take attendance above first.
+                          </div>
+                        ) : (
+                          <div className="overflow-hidden border border-slate-150 rounded-lg">
+                            <table className="min-w-full divide-y divide-slate-150 text-xs">
+                              <thead className="bg-slate-50">
+                                <tr>
+                                  <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                                  <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Attendance Status</th>
+                                  <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Covered Absence Date</th>
+                                </tr>
+                              </thead>
+                              <tbody className="bg-white divide-y divide-slate-100 font-sans text-xs">
+                                {monthLogs
+                                  .sort((a, b) => a.date.localeCompare(b.date))
+                                  .map(log => (
+                                    <tr key={log.id} className="hover:bg-slate-50/50">
+                                      <td className="px-4 py-2 font-mono font-medium text-slate-705">{log.date}</td>
+                                      <td className="px-4 py-2">
+                                        <span className={`inline-flex px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider border ${
+                                          log.status === 'present' ? 'bg-emerald-50 text-emerald-800 border-emerald-100' :
+                                          log.status === 'absent' ? 'bg-rose-50 text-rose-800 border-rose-105' :
+                                          log.status === 'holiday' ? 'bg-sky-50 text-sky-800 border-sky-100' :
+                                          log.status === 'took_off' ? 'bg-amber-50 text-amber-800 border-amber-100' :
+                                          'bg-indigo-50 text-indigo-800 border-indigo-100'
+                                        }`}>
+                                          {log.status === 'took_off' ? 'Took Off' : log.status === 'gap_covered' ? 'Gap Covered' : log.status}
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-2 font-mono text-slate-500">
+                                        {log.status === 'gap_covered' && log.gapCoveredDate ? log.gapCoveredDate : '—'}
+                                      </td>
+                                    </tr>
+                                  ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1181,7 +1710,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
 
             {salaries.filter(s => s.month === salaryMonth).length === 0 ? (
               <div className="text-center p-12 text-gray-400 font-medium border border-dashed border-gray-200 rounded-xl">
-                No invoices logged for {salaryMonth}. Click "Generate Invoices" above to instantiate them based on your students rates.
+                No invoices logged for {formatMonthName(salaryMonth)}. Click "Generate Invoices" above to instantiate them based on your students rates.
               </div>
             ) : (
               <div className="border border-gray-150 rounded-xl overflow-hidden">
@@ -1192,6 +1721,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                       <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider font-sans">Month</th>
                       <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Amount</th>
                       <th className="px-6 py-3.5 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Paid Status</th>
+                      <th className="px-6 py-3.5 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Received On</th>
                       <th className="px-6 py-3.5 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Mark Payment</th>
                     </tr>
                   </thead>
@@ -1204,8 +1734,8 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                             <span className="font-bold text-slate-800 block">{associatedStudent?.name || 'Deleted Student'}</span>
                             <span className="text-[10px] text-gray-400 font-mono italic block leading-none mt-1">{sal.parentEmail}</span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap font-mono text-xs">{sal.month}</td>
-                          <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">${sal.amount}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-sans text-xs">{formatMonthName(sal.month)}</td>
+                          <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">৳{sal.amount}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${
                               sal.status === 'paid'
@@ -1214,6 +1744,19 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                             }`}>
                               {sal.status}
                             </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-left text-xs">
+                            {sal.status === 'paid' ? (
+                              <input
+                                type="date"
+                                value={sal.receivedDate || ''}
+                                onChange={(e) => updateSalaryReceivedDate(sal, e.target.value)}
+                                className="px-2 py-1 bg-gray-55 border border-gray-200 rounded text-xs outline-none focus:border-indigo-500 focus:bg-white text-slate-800 font-medium"
+                                title="Define exactly when salary was received"
+                              />
+                            ) : (
+                              <span className="text-gray-400 italic">—</span>
+                            )}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
                             <button
@@ -1259,7 +1802,7 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2">
                 <div className="bg-white/10 rounded-xl p-4 border border-white/5">
                   <span className="block text-[10px] text-indigo-200 uppercase font-mono tracking-wider font-bold">Scheduled Month</span>
-                  <span className="block text-xl font-bold font-mono mt-1">{salaryMonth}</span>
+                  <span className="block text-[15px] sm:text-[17px] font-bold mt-1 text-slate-100 font-sans">{formatMonthName(salaryMonth)}</span>
                 </div>
                 <div className="bg-white/10 rounded-xl p-4 border border-white/5">
                   <span className="block text-[10px] text-indigo-200 uppercase font-mono tracking-wider font-bold">Averaged Attendance</span>
@@ -1267,11 +1810,11 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                 </div>
                 <div className="bg-white/10 rounded-xl p-4 border border-white/5">
                   <span className="block text-[10px] text-indigo-200 uppercase font-mono tracking-wider font-bold">fees Received</span>
-                  <span className="block text-xl font-bold font-mono mt-1 text-emerald-200">${reportsData.earnedIncome}</span>
+                  <span className="block text-xl font-bold font-mono mt-1 text-emerald-200">৳{reportsData.earnedIncome}</span>
                 </div>
                 <div className="bg-white/10 rounded-xl p-4 border border-white/5">
                   <span className="block text-[10px] text-indigo-200 uppercase font-mono tracking-wider font-bold">outstanding fees</span>
-                  <span className="block text-xl font-bold font-mono mt-1 text-red-100">${reportsData.pendingIncome}</span>
+                  <span className="block text-xl font-bold font-mono mt-1 text-red-100">৳{reportsData.pendingIncome}</span>
                 </div>
               </div>
             </div>
@@ -1311,11 +1854,12 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                 </div>
                 <div>
                   <h4 className="font-bold text-gray-800 uppercase text-xs tracking-wider mb-2 font-mono">Report Highlights</h4>
-                  <ul className="space-y-1.5 text-xs text-slate-500">
-                    <li>Total logged attendances in system: <strong className="text-slate-800 font-mono">{reportsData.totalAttendSessions}</strong></li>
-                    <li>Actual marked as Present: <strong className="text-emerald-600 font-mono">{reportsData.presentSessions}</strong></li>
-                    <li>Actual marked as Late: <strong className="text-amber-500 font-mono">{reportsData.lateSessions}</strong></li>
-                    <li>Earning Completion Status: <strong className="text-indigo-600 font-mono">{Math.round((reportsData.earnedIncome / (reportsData.earnedIncome + reportsData.pendingIncome || 1)) * 100)}%</strong></li>
+                  <ul className="space-y-1.5 text-xs text-slate-500 font-sans">
+                    <li>Total Logged Sessions (marked): <strong className="text-slate-805 font-mono">{reportsData.totalAttendSessions}</strong></li>
+                    <li>Total Taken Classes: <strong className="text-emerald-600 font-mono">{reportsData.totalTaken}</strong></li>
+                    <li>Total Gap Days (Absent/Took Off): <strong className="text-rose-500 font-mono">{reportsData.gapClasses}</strong></li>
+                    <li>Total Covered Gap Classes: <strong className="text-indigo-650 font-mono">{reportsData.coveredClasses}</strong></li>
+                    <li>Earning Completion Status: <strong className="text-indigo-600 font-mono">{Math.round((reportsData.earnedIncome / (reportsData.earnedIncome + reportsData.pendingIncome || 1)) * 105 || 0) > 100 ? 100 : Math.round((reportsData.earnedIncome / (reportsData.earnedIncome + reportsData.pendingIncome || 1)) * 100)}%</strong></li>
                   </ul>
                 </div>
                 <div>
@@ -1348,8 +1892,14 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                       const studentAttendances = attendances.filter(a => a.studentId === std.id && a.date.startsWith(salaryMonth));
                       const totalC = studentAttendances.length;
                       const presentC = studentAttendances.filter(a => a.status === 'present').length;
-                      const lateC = studentAttendances.filter(a => a.status === 'late').length;
-                      const absC = studentAttendances.filter(a => a.status === 'absent').length;
+                      const absentC = studentAttendances.filter(a => a.status === 'absent').length;
+                      const holidayC = studentAttendances.filter(a => a.status === 'holiday').length;
+                      const tookOffC = studentAttendances.filter(a => a.status === 'took_off').length;
+                      const gapCoveredC = studentAttendances.filter(a => a.status === 'gap_covered').length;
+
+                      const takenC = presentC + gapCoveredC;
+                      const gapsC = absentC + tookOffC;
+                      const coveredC = gapCoveredC;
                       
                       const invoice = salaries.find(sal => sal.studentId === std.id && sal.month === salaryMonth);
 
@@ -1363,12 +1913,12 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                             
                             <div className="flex gap-4 items-center flex-wrap">
                               <div className="text-center md:text-right">
-                                <span className="block text-[10px] text-gray-400 leading-none mb-1">Attendance Log</span>
-                                <span className="font-mono font-bold text-slate-700">P:{presentC} | L:{lateC} | A:{absC} ({totalC} classes)</span>
+                                <span className="block text-[10px] text-gray-400 leading-none mb-1">Class Tally Breakdown</span>
+                                <span className="font-mono font-bold text-slate-700">Taken:{takenC} | Gaps:{gapsC} | Covered:{coveredC}</span>
                               </div>
                               <div className="text-center md:text-right border-l pl-4 border-gray-200">
                                 <span className="block text-[10px] text-gray-400 leading-none mb-1">Class Rate</span>
-                                <span className="font-mono font-bold text-indigo-650">${std.salaryAmount}</span>
+                                <span className="font-mono font-bold text-indigo-650">৳{std.salaryAmount}</span>
                               </div>
                               <div className="text-right border-l pl-4 border-gray-200">
                                 <span className="block text-[10px] text-gray-400 leading-none mb-1">Invoice Status</span>
@@ -1585,9 +2135,16 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
     // Calculate attendance status counters
     const totalSess = studentSessHistory.length;
     const presentCount = studentSessHistory.filter(a => a.status === 'present').length;
-    const lateCount = studentSessHistory.filter(a => a.status === 'late').length;
     const absentCount = studentSessHistory.filter(a => a.status === 'absent').length;
-    const attPercent = totalSess > 0 ? Math.round(((presentCount + lateCount / 2) / totalSess) * 100) : 100;
+    const holidayCount = studentSessHistory.filter(a => a.status === 'holiday').length;
+    const tookOffCount = studentSessHistory.filter(a => a.status === 'took_off').length;
+    const gapCoveredCount = studentSessHistory.filter(a => a.status === 'gap_covered').length;
+
+    const totalTaken = presentCount + gapCoveredCount;
+    const gapClasses = absentCount + tookOffCount;
+    const coveredClasses = gapCoveredCount;
+
+    const attPercent = totalSess > 0 ? Math.round(((presentCount + gapCoveredCount) / totalSess) * 100) : 100;
 
     return (
       <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1680,16 +2237,32 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Salary Payment Due Day (1 - 31) *</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="31"
-                      required
-                      value={editStudDueDate}
-                      onChange={e => setEditStudDueDate(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-255 focus:bg-white focus:border-indigo-500 rounded-lg text-xs font-medium outline-none"
-                    />
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">Weekly Tutoring Days *</label>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
+                      {['Sat', 'Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map(day => {
+                        const isSelected = editStudTutoringDays.includes(day);
+                        return (
+                          <button
+                            type="button"
+                            key={day}
+                            onClick={() => {
+                              if (isSelected) {
+                                setEditStudTutoringDays(prev => prev.filter(d => d !== day));
+                              } else {
+                                setEditStudTutoringDays(prev => [...prev, day]);
+                              }
+                            }}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all cursor-pointer border ${
+                              isSelected
+                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {day}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 
@@ -1763,8 +2336,8 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                     <p><strong className="text-slate-800">Primary Contact Email:</strong> <span className="select-all block font-mono text-indigo-700 mt-1">{selectedStudent.parentEmail}</span></p>
                     <p><strong className="text-slate-800">Contact Number:</strong> <span className="block mt-1 font-medium text-slate-700">{selectedStudent.contactInfo || 'Not Set'}</span></p>
                     <p><strong className="text-slate-800">Scheduled Address:</strong> <span className="block mt-1 text-slate-750 font-medium">{selectedStudent.address}</span></p>
-                    <p><strong className="text-slate-800">Salary Due Term:</strong> <span className="block mt-1 font-mono font-bold text-slate-700">Day {selectedStudent.salaryDueDate} of month</span></p>
-                    <p><strong className="text-slate-800">Contracted Rate:</strong> <span className="block mt-1 font-mono font-bold text-indigo-600 text-sm">${selectedStudent.salaryAmount} / month</span></p>
+                    <p><strong className="text-slate-800 font-sans">Tutoring Days:</strong> <span className="block mt-1 font-sans font-bold text-slate-700">{selectedStudent.tutoringDays?.join(', ') || 'None Set'}</span></p>
+                    <p><strong className="text-slate-800">Contracted Rate:</strong> <span className="block mt-1 font-mono font-bold text-indigo-600 text-sm">৳{selectedStudent.salaryAmount} / month</span></p>
                   </div>
 
                   {/* Academic Progress observations tracker */}
@@ -1787,19 +2360,19 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                     <div className="grid grid-cols-4 gap-2 text-center mt-3 text-slate-600">
                       <div className="p-2 bg-slate-50 border rounded-lg">
                         <span className="block text-[8px] uppercase tracking-wider font-bold text-slate-400">total</span>
-                        <span className="text-sm font-bold font-mono">{totalSess}</span>
+                        <span className="text-sm font-bold font-mono text-slate-800">{totalSess}</span>
                       </div>
                       <div className="p-2 bg-emerald-50 border border-emerald-100 rounded-lg text-emerald-850">
-                        <span className="block text-[8px] uppercase tracking-wider font-bold text-emerald-400">present</span>
-                        <span className="text-sm font-bold font-mono">{presentCount}</span>
+                        <span className="block text-[8px] uppercase tracking-wider font-bold text-emerald-500">taken</span>
+                        <span className="text-sm font-bold font-mono">{totalTaken}</span>
                       </div>
-                      <div className="p-2 bg-amber-50 border border-amber-100 rounded-lg text-amber-850">
-                        <span className="block text-[8px] uppercase tracking-wider font-bold text-amber-400">late</span>
-                        <span className="text-sm font-bold font-mono">{lateCount}</span>
+                      <div className="p-2 bg-rose-50 border border-rose-100 rounded-lg text-rose-800">
+                        <span className="block text-[8px] uppercase tracking-wider font-bold text-rose-500">gaps</span>
+                        <span className="text-sm font-bold font-mono">{gapClasses}</span>
                       </div>
-                      <div className="p-2 bg-indigo-50 border border-indigo-100 rounded-lg text-indigo-850 font-semibold font-mono">
-                        <span className="block text-[8px] uppercase tracking-wider font-bold text-indigo-400">rate</span>
-                        <span className="text-sm font-bold">{attPercent}%</span>
+                      <div className="p-2 bg-indigo-50 border border-indigo-150 rounded-lg text-indigo-850 font-semibold">
+                        <span className="block text-[8px] uppercase tracking-wider font-bold text-indigo-500">rate</span>
+                        <span className="text-sm font-bold font-mono">{attPercent}%</span>
                       </div>
                     </div>
                   </div>
@@ -1814,13 +2387,20 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                         {studentSessHistory.map(att => (
                           <div key={att.id} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-100">
                             <span className="font-mono text-[11px] text-slate-600">{att.date}</span>
-                            <span className={`text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 border rounded-full ${
-                              att.status === 'present' ? 'bg-emerald-50 text-emerald-805 border-emerald-150' :
-                              att.status === 'absent' ? 'bg-rose-50 text-rose-800 border-rose-150' :
-                              'bg-amber-50 text-amber-850 border-amber-100'
-                            }`}>
-                              {att.status}
-                            </span>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className={`text-[8px] font-extrabold uppercase tracking-wider px-2 py-0.5 border rounded-full ${
+                                att.status === 'present' ? 'bg-emerald-50 text-emerald-805 border-emerald-150' :
+                                att.status === 'absent' ? 'bg-rose-50 text-rose-800 border-rose-150' :
+                                att.status === 'holiday' ? 'bg-cyan-50 text-cyan-800 border-cyan-150' :
+                                att.status === 'took_off' ? 'bg-amber-50 text-amber-800 border-amber-150' :
+                                'bg-indigo-50 text-indigo-805 border-indigo-150'
+                              }`}>
+                                {att.status === 'took_off' ? 'Took Off' : att.status === 'gap_covered' ? 'Gap Covered' : att.status}
+                              </span>
+                              {att.status === 'gap_covered' && att.gapCoveredDate && (
+                                <span className="text-[9px] text-slate-400 font-mono">Absent: {att.gapCoveredDate}</span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1836,9 +2416,9 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
                       <div className="space-y-1.5 max-h-36 overflow-y-auto">
                         {studentPayments.map(sal => (
                           <div key={sal.id} className="flex justify-between items-center text-[11px] p-2 bg-slate-50 border rounded-lg">
-                            <span className="font-mono text-slate-550">{sal.month}</span>
+                            <span className="font-sans text-slate-550">{formatMonthName(sal.month)}</span>
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-800">${sal.amount}</span>
+                              <span className="font-bold text-slate-800">৳{sal.amount}</span>
                               <span className={`text-[8px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
                                 sal.status === 'paid' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'
                               }`}>
@@ -1876,6 +2456,112 @@ export default function TutorDashboard({ user, onSignOut }: TutorDashboardProps)
               Close Window
             </button>
           </div>
+        </div>
+      </div>
+    );
+  })()}
+
+  {editingAttendance && (() => {
+    const relatedStudent = students.find(s => s.id === editingAttendance.studentId);
+    
+    // Past absent candidate dates for this student
+    const pastAbsentDates = Array.from(new Set(
+      attendances
+        .filter(a => a.studentId === editingAttendance.studentId && (a.status === 'absent' || a.status === 'took_off'))
+        .map(a => a.date)
+        .sort((a, b) => b.localeCompare(a))
+    ));
+
+    return (
+      <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-200">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-150">
+                Edit Log Entry
+              </span>
+              <h3 className="text-md font-extrabold text-slate-900 mt-1">Attendance on {editingAttendance.date}</h3>
+            </div>
+            <button
+              onClick={() => setEditingAttendance(null)}
+              className="text-slate-400 hover:text-slate-600 font-mono text-sm font-bold"
+            >
+              ✕ Close
+            </button>
+          </div>
+
+          <form onSubmit={handleSaveEditAttendanceChanges} className="p-6 space-y-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase mb-1.5">Student</label>
+              <div className="p-3 bg-slate-50 border border-slate-150 rounded-lg text-xs font-bold text-slate-800">
+                {relatedStudent?.name || editingAttendance.studentId} ({relatedStudent?.grade || 'N/A'})
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1.5">Status Status *</label>
+              <select
+                required
+                value={editAttendanceStatus}
+                onChange={(e) => setEditAttendanceStatus(e.target.value as any)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-250 focus:bg-white focus:border-indigo-500 rounded-lg text-xs font-medium outline-none transition-all"
+              >
+                <option value="present">Present (Taken)</option>
+                <option value="absent">Absent (Gap)</option>
+                <option value="holiday">Holiday</option>
+                <option value="took_off">Student Took Off</option>
+                <option value="gap_covered">Covered previous gap class</option>
+              </select>
+            </div>
+
+            {/* Custom gap date selector for edit mode */}
+            {editAttendanceStatus === 'gap_covered' && (
+              <div className="space-y-2 animate-in slide-in-from-top-1 duration-200">
+                <label className="block text-[11px] font-bold text-indigo-650 uppercase">Date student was absent *</label>
+                
+                {pastAbsentDates.length > 0 ? (
+                  <select
+                    value={editAttendanceGapDate}
+                    onChange={(e) => setEditAttendanceGapDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-255 focus:bg-white focus:border-indigo-500 rounded-lg text-xs font-medium outline-none transition-all"
+                  >
+                    <option value="">-- Choose past absent date --</option>
+                    {pastAbsentDates.map(dStr => (
+                      <option key={dStr} value={dStr}>{dStr}</option>
+                    ))}
+                    <option value="custom">-- Custom Other Date --</option>
+                  </select>
+                ) : null}
+
+                {(pastAbsentDates.length === 0 || editAttendanceGapDate === 'custom' || !pastAbsentDates.includes(editAttendanceGapDate)) && (
+                  <input
+                    type="date"
+                    required
+                    value={editAttendanceGapDate === 'custom' ? '' : editAttendanceGapDate}
+                    onChange={(e) => setEditAttendanceGapDate(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-255 focus:bg-white focus:border-indigo-500 rounded-lg text-xs font-medium outline-none transition-all"
+                  />
+                )}
+              </div>
+            )}
+
+            <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditingAttendance(null)}
+                className="px-4 py-2 border bg-white border-slate-200 text-slate-650 hover:bg-slate-50 font-bold rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isSavingEditAttendance}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-xs font-bold transition-all cursor-pointer shadow-md"
+              >
+                {isSavingEditAttendance ? 'Saving...' : 'Save Log Changes'}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     );

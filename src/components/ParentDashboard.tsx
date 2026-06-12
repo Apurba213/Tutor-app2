@@ -32,6 +32,20 @@ interface ParentDashboardProps {
   onSignOut: () => void;
 }
 
+const formatMonthName = (ym: string): string => {
+  if (!ym || ym.length !== 7) return ym;
+  const [year, month] = ym.split('-');
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const mIndex = parseInt(month, 10) - 1;
+  if (mIndex >= 0 && mIndex < 12) {
+    return `${months[mIndex]} ${year}`;
+  }
+  return ym;
+};
+
 export default function ParentDashboard({ user, onSignOut }: ParentDashboardProps) {
   const [activeTab, setActiveTab] = useState<'children' | 'tutors' | 'attendance' | 'bills'>('children');
   const [children, setChildren] = useState<Student[]>([]);
@@ -40,6 +54,10 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
   const [salaries, setSalaries] = useState<Salary[]>([]);
   
   const [isLoading, setIsLoading] = useState(true);
+
+  // Parent Focus States for Month Attendance Report
+  const [parentFocusStudentId, setParentFocusStudentId] = useState<string>('');
+  const [parentFocusMonth, setParentFocusMonth] = useState<string>(new Date().toISOString().slice(0, 7));
 
   // Deletion States
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -195,7 +213,7 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
             }`}
           >
             <BookOpen className="w-4 h-4" />
-            <span>My Children</span>
+            <span>My Students</span>
           </button>
 
           <button
@@ -274,15 +292,15 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
             </div>
             
             <h1 className="hidden md:block text-lg font-display font-extrabold text-slate-905 tracking-tight capitalize">
-              {activeTab === 'children' ? 'My Children Classes & Schedules' : `${activeTab} Pane`}
+              {activeTab === 'children' ? 'My Students Classes & Schedules' : `${activeTab} Pane`}
             </h1>
           </div>
 
           <div className="flex items-center gap-4">
-            {/* Firebase Active Badge */}
-            <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 bg-indigo-50/50 text-indigo-700 rounded-full border border-indigo-100/50 text-[10px] font-bold uppercase tracking-wider">
-              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-              <span>Fully Secure Node Connected</span>
+            {/* Status Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-wider">
+              <span className="h-2 w-2 rounded-full bg-emerald-500"></span>
+              <span>Parent Portal Active</span>
             </div>
             
             {/* Mobile Sign Out Option */}
@@ -299,7 +317,7 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
         {/* Floating Mobile Tabs (only on mobile) */}
         <div className="md:hidden bg-white border-b border-slate-200 px-4 py-2 flex items-center gap-1 rounded-xl mx-4 mt-4 overflow-x-auto shrink-0 scrollbar-none" id="parent-mobile-tabs">
           {[
-            { id: 'children', label: 'Children', icon: BookOpen },
+            { id: 'children', label: 'Students', icon: BookOpen },
             { id: 'tutors', label: 'Tutors', icon: User },
             { id: 'attendance', label: 'Attendance', icon: CalendarDays },
             { id: 'bills', label: 'Bills', icon: Coins },
@@ -326,13 +344,13 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
           {/* Summary stats row on desktop */}
           {children.length > 0 && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-in fade-in duration-300">
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider font-sans">Enrolled Children</span>
+              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col justify-between">
+                <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider font-sans">Enrolled Students</span>
                 <span className="text-2xl sm:text-3xl font-extrabold text-slate-900 font-mono mt-2">{children.length}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Total Monthly Fees</span>
-                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-650 font-mono mt-2">${children.reduce((acc, curr) => acc + curr.salaryAmount, 0)}</span>
+                <span className="text-2xl sm:text-3xl font-extrabold text-indigo-650 font-mono mt-2">৳{children.reduce((acc, curr) => acc + curr.salaryAmount, 0)}</span>
               </div>
               <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
                 <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider">Unmarked Dues items</span>
@@ -376,7 +394,7 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
                       </div>
                       <div className="text-right">
                         <span className="block text-[10px] text-gray-400 font-sans uppercase">Monthly salary</span>
-                        <span className="block text-md font-bold text-indigo-650">${child.salaryAmount}</span>
+                        <span className="block text-md font-bold text-indigo-650">৳{child.salaryAmount}</span>
                       </div>
                     </div>
 
@@ -393,7 +411,7 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
                       {child.contactInfo && (
                         <p className="pt-1"><span className="font-bold text-slate-750">Contact Info:</span> {child.contactInfo}</p>
                       )}
-                      <p className="pt-1"><span className="font-bold text-slate-700">Scheduled Due Day:</span> Day {child.salaryDueDate} of month</p>
+                      <p className="pt-1"><span className="font-bold text-slate-700">Tutoring Days:</span> {child.tutoringDays?.join(', ') || 'N/A'}</p>
                       
                       {/* Academic Progress & Feedback */}
                       <div className="pt-2 border-t border-indigo-50 mt-2">
@@ -572,9 +590,9 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
                                     <div className="space-y-1 max-h-24 overflow-y-auto">
                                       {kidPayments.map(sal => (
                                         <div key={sal.id} className="flex justify-between items-center text-[10px] p-1.5 bg-white border border-slate-100 rounded">
-                                          <span className="font-mono text-slate-500">{sal.month}</span>
+                                          <span className="font-sans text-slate-550">{formatMonthName(sal.month)}</span>
                                           <div className="flex items-center gap-1.5">
-                                            <span className="font-bold text-slate-800">${sal.amount}</span>
+                                            <span className="font-bold text-slate-800">৳{sal.amount}</span>
                                             <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 rounded-full ${
                                               sal.status === 'paid' ? 'bg-emerald-50 text-emerald-800' : 'bg-rose-50 text-rose-750'
                                             }`}>
@@ -651,6 +669,150 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
                   })}
                 </div>
               )}
+
+              {/* SEPARATE OPTION FOR VIEWING EACH STUDENT FULL MONTH ATTENDANCE */}
+              {children.length > 0 && (
+                <div className="mt-8 pt-6 border-t border-slate-100 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-900">Student Monthly Attendance Analyzer</h3>
+                    <p className="text-xs text-gray-400 mt-1 font-sans">Select any student and month to calculate exact attendance percentages and view full daily sheets.</p>
+                  </div>
+
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-4">
+                    <div className="flex flex-wrap gap-3 items-center">
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Select Student</span>
+                        <select
+                          value={parentFocusStudentId || (children[0]?.id || '')}
+                          onChange={(e) => setParentFocusStudentId(e.target.value)}
+                          className="px-3 py-1.5 bg-white border border-gray-250 rounded-lg text-xs font-semibold outline-none focus:border-indigo-500"
+                        >
+                          <option value="">-- Choose Student --</option>
+                          {children.map(std => (
+                            <option key={std.id} value={std.id}>{std.name} ({std.grade})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Select Month</span>
+                        <input
+                          type="month"
+                          value={parentFocusMonth}
+                          onChange={(e) => setParentFocusMonth(e.target.value)}
+                          className="px-3 py-1.5 bg-white border border-gray-255 rounded-lg text-xs font-semibold outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    {(() => {
+                      const activeStdId = parentFocusStudentId || children[0]?.id;
+                      if (!activeStdId) return null;
+
+                      const activeStudentObj = children.find(s => s.id === activeStdId);
+
+                      // Filter logs for this student and this month
+                      const monthLogs = attendances.filter(a => {
+                        return a.studentId === activeStdId && a.date.startsWith(parentFocusMonth);
+                      });
+
+                      const presents = monthLogs.filter(a => a.status === 'present').length;
+                      const gaps = monthLogs.filter(a => a.status === 'absent').length;
+                      const tookOffs = monthLogs.filter(a => a.status === 'took_off').length;
+                      const holidays = monthLogs.filter(a => a.status === 'holiday').length;
+                      const gapCovereds = monthLogs.filter(a => a.status === 'gap_covered').length;
+
+                      const totalLogged = monthLogs.length;
+                      // Formula for percentage: (presents + gapCovereds) / (presents + gaps + tookOffs + gapCovereds) * 100
+                      const denominator = presents + gaps + tookOffs + gapCovereds;
+                      const attendancePercentage = denominator > 0 
+                        ? Math.round(((presents + gapCovereds) / denominator) * 100) 
+                        : 100;
+
+                      return (
+                        <div className="bg-white border border-slate-150 rounded-xl p-4 mt-2 space-y-4">
+                          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-3">
+                            <div>
+                              <h4 className="text-sm font-bold text-slate-800">{activeStudentObj?.name}'s Full Month Statistics</h4>
+                              <p className="text-[11px] text-slate-400 mt-0.5 font-sans">Summary data computed for {formatMonthName(parentFocusMonth)}.</p>
+                            </div>
+                            <div className="bg-indigo-50 border border-indigo-150 rounded-xl px-4 py-2 text-center">
+                              <span className="block text-[9px] uppercase font-bold tracking-wider text-indigo-500">Attendance Percentage</span>
+                              <span className="text-xl font-black text-indigo-700 font-mono">
+                                {monthLogs.length === 0 ? '—' : `${attendancePercentage}%`}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-center">
+                            <div className="p-2 bg-emerald-50 rounded-lg border border-emerald-100/60">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-emerald-500">Presences (Taken)</span>
+                              <span className="text-xs font-mono font-extrabold text-emerald-800">{presents}</span>
+                            </div>
+                            <div className="p-2 bg-indigo-50 rounded-lg border border-indigo-100/60">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-indigo-500">Gaps Covered</span>
+                              <span className="text-xs font-mono font-extrabold text-indigo-800">{gapCovereds}</span>
+                            </div>
+                            <div className="p-2 bg-rose-50 rounded-lg border border-rose-100/60">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-rose-500">Absents</span>
+                              <span className="text-xs font-mono font-extrabold text-rose-800">{gaps}</span>
+                            </div>
+                            <div className="p-2 bg-amber-50 rounded-lg border border-amber-100/60">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-amber-500">Took Off</span>
+                              <span className="text-xs font-mono font-extrabold text-amber-800">{tookOffs}</span>
+                            </div>
+                            <div className="p-2 bg-sky-50 rounded-lg border border-sky-100/60">
+                              <span className="block text-[8px] uppercase tracking-wider font-extrabold text-sky-500">Holidays</span>
+                              <span className="text-xs font-mono font-extrabold text-sky-800">{holidays}</span>
+                            </div>
+                          </div>
+
+                          {monthLogs.length === 0 ? (
+                            <div className="bg-slate-50 text-slate-450 text-xs italic p-6 rounded-lg text-center border border-dashed border-slate-200">
+                              No historical logs entered for this student in {formatMonthName(parentFocusMonth)}.
+                            </div>
+                          ) : (
+                            <div className="overflow-hidden border border-slate-150 rounded-lg">
+                              <table className="min-w-full divide-y divide-slate-150 text-xs">
+                                <thead className="bg-slate-50">
+                                  <tr>
+                                    <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                                    <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Attendance Status</th>
+                                    <th className="px-4 py-2.5 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Covered Absence Date</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-slate-100 font-sans text-xs">
+                                  {monthLogs
+                                    .sort((a, b) => a.date.localeCompare(b.date))
+                                    .map(log => (
+                                      <tr key={log.id} className="hover:bg-slate-50/50">
+                                        <td className="px-4 py-2 font-mono font-medium text-slate-700">{log.date}</td>
+                                        <td className="px-4 py-2">
+                                          <span className={`inline-flex px-2 py-0.5 rounded text-[9px] uppercase font-bold tracking-wider border ${
+                                            log.status === 'present' ? 'bg-emerald-50 text-emerald-800 border-emerald-100' :
+                                            log.status === 'absent' ? 'bg-rose-50 text-rose-800 border-rose-150' :
+                                            log.status === 'holiday' ? 'bg-sky-50 text-sky-800 border-sky-100' :
+                                            log.status === 'took_off' ? 'bg-amber-50 text-amber-800 border-amber-100' :
+                                            'bg-indigo-50 text-indigo-800 border-indigo-100'
+                                          }`}>
+                                            {log.status === 'took_off' ? 'Took Off' : log.status === 'gap_covered' ? 'Gap Covered' : log.status}
+                                          </span>
+                                        </td>
+                                        <td className="px-4 py-2 font-mono text-slate-500">
+                                          {log.status === 'gap_covered' && log.gapCoveredDate ? log.gapCoveredDate : '—'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -671,10 +833,11 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
                   <table className="min-w-full divide-y divide-gray-200 text-sm text-slate-600">
                     <thead className="bg-slate-50">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Student Child</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Student Name</th>
                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider font-mono">Invoice Month</th>
                         <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Salary Amount</th>
                         <th className="px-6 py-3 text-center text-xs font-bold text-gray-500 uppercase tracking-wider">Receipt Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Payment Date</th>
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-150">
@@ -682,9 +845,9 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
                         const associatedKid = children.find(c => c.id === sal.studentId);
                         return (
                           <tr key={sal.id} className="hover:bg-slate-50/40">
-                            <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">{associatedKid?.name || 'Assigned Child'}</td>
-                            <td className="px-6 py-4 whitespace-nowrap font-mono text-xs">{sal.month}</td>
-                            <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-800">${sal.amount}</td>
+                            <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-900">{associatedKid?.name || 'Assigned Student'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap font-sans text-xs">{formatMonthName(sal.month)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap font-bold text-slate-800">৳{sal.amount}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-center">
                               <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider ${
                                 sal.status === 'paid'
@@ -693,6 +856,9 @@ export default function ParentDashboard({ user, onSignOut }: ParentDashboardProp
                               }`}>
                                 {sal.status}
                               </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-left text-xs text-slate-500 font-mono font-bold">
+                              {sal.status === 'paid' ? (sal.receivedDate || sal.paidAt?.toString().split('T')[0] || 'Cleared') : '—'}
                             </td>
                           </tr>
                         );

@@ -109,11 +109,11 @@ export default function App() {
         <header className="max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between border-b border-indigo-100/40 bg-mixed-creamy/65 backdrop-blur-md sticky top-0 z-50">
           <div className="flex items-center gap-2.5">
             <div className="bg-gradient-to-br from-indigo-500 to-indigo-700 text-white p-2 rounded-2xl shadow-lg flex items-center justify-center transform hover:rotate-6 transition-transform">
-              <CalendarDays className="w-5 h-5 animate-pulse" id="landing-brand-icon" />
+              <CalendarDays className="w-5 h-5" id="landing-brand-icon" />
             </div>
-            <span className="font-display font-extrabold text-xl tracking-tight bg-gradient-to-r from-slate-900 to-indigo-950 bg-clip-text text-transparent">TutorConnect</span>
+            <span className="font-display font-extrabold text-xl tracking-tight bg-gradient-to-r from-slate-900 to-indigo-950 bg-clip-text text-transparent">Tutor's Book</span>
           </div>
-          <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3.5 py-1.5 rounded-full uppercase tracking-wider font-bold">Stable Release v1.2</span>
+          <span className="text-[10px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-100/50 px-3.5 py-1.5 rounded-full uppercase tracking-wider font-bold">Personal Workspace</span>
         </header>
  
         {/* HERO SECTION */}
@@ -122,16 +122,16 @@ export default function App() {
           {/* Explanation Text */}
           <div className="lg:w-6/12 space-y-6 text-center lg:text-left">
             <div className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-50 to-indigo-100/80 border border-indigo-150 text-indigo-850 text-[11px] font-bold px-4 py-2 rounded-full uppercase tracking-widest shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-600 animate-spin-slow" />
-              <span>Durable Cloud Database Synced</span>
+              <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Workspace</span>
             </div>
  
             <h1 className="text-4.5xl sm:text-5.5xl font-display font-extrabold tracking-tight text-slate-900 leading-none">
-              Supercharge Home Tutoring & <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent underline decoration-indigo-200 decoration-wavy">Parent Updates</span>.
+              Manage Tutoring Days & <span className="bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent underline decoration-indigo-200 decoration-wavy">Parent Updates</span>.
             </h1>
             
             <p className="text-slate-500 text-sm sm:text-base max-w-lg leading-relaxed mx-auto lg:mx-0 font-medium">
-              A bespoke full-stack workspace linking dedicated educators and parent houses instantly. Access class calendar records, academic feedback notes, student portfolios, and pristine monthly financial statements.
+              An interactive book for tutors and parents to keep logs of classes, tutoring days, attendance percentage, and salary history.
             </p>
  
             {/* Core Value points */}
@@ -151,7 +151,7 @@ export default function App() {
                   <Coins className="w-5 h-5 flex-shrink-0" />
                 </div>
                 <div>
-                  <h4 className="font-display font-bold text-slate-950 text-sm">Secure Tuition Ledger</h4>
+                  <h4 className="font-display font-bold text-slate-950 text-sm">Tuition Ledger</h4>
                   <p className="text-[11px] text-slate-400 mt-1 leading-normal font-medium">No missing payments. Track monthly dues and structured salary logs securely.</p>
                 </div>
               </div>
@@ -169,8 +169,8 @@ export default function App() {
               <div className="p-3 bg-gradient-to-br from-indigo-50 to-indigo-100/55 text-indigo-650 rounded-2xl w-14 h-14 flex items-center justify-center mx-auto border border-indigo-150 shadow-sm">
                 <Layers className="w-6 h-6" />
               </div>
-              <h2 className="text-xl font-display font-extrabold text-slate-950">Access Portal</h2>
-              <p className="text-xs text-slate-400 font-medium">Sign in to claim your dashboard panel with verified credentials.</p>
+              <h2 className="text-xl font-display font-extrabold text-slate-950">Log In or Create Account</h2>
+              <p className="text-xs text-slate-400 font-medium">Log in or register your account to set up your personal workspace.</p>
             </div>
  
             {authError && (
@@ -222,7 +222,7 @@ export default function App() {
  
         <footer className="border-t border-indigo-100/40 bg-mixed-creamy/50 py-6 text-center select-none z-10 relative">
           <p className="text-[10px] font-mono text-slate-400 uppercase tracking-widest font-bold">
-            TutorConnect Systems inc &bull; Protected by Firebase rules
+            Tutor's Book &bull; All rights reserved
           </p>
         </footer>
  

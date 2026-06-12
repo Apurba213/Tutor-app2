@@ -53,8 +53,8 @@ service cloud.firestore {
     }
 
     function isValidStudent(data) {
-      return data.keys().hasAll(['id', 'name', 'grade', 'subjects', 'address', 'parentEmail', 'tutorUid', 'salaryAmount', 'salaryDueDate', 'createdAt'])
-        && data.keys().size() == 10
+      return data.keys().hasAll(['id', 'name', 'grade', 'subjects', 'address', 'parentEmail', 'tutorUid', 'salaryAmount', 'tutoringDays', 'createdAt'])
+        && data.keys().size() >= 10 && data.keys().size() <= 12
         && data.id is string && data.id.size() <= 128
         && data.name is string && data.name.size() <= 100
         && data.grade is string && data.grade.size() <= 50
@@ -62,9 +62,11 @@ service cloud.firestore {
         && data.address is string && data.address.size() <= 300
         && data.parentEmail is string && data.parentEmail.size() <= 128
         && data.tutorUid is string && data.tutorUid.size() <= 128
-        && data.salaryAmount is int && data.salaryAmount >= 0
-        && data.salaryDueDate is int && data.salaryDueDate >= 1 && data.salaryDueDate <= 31
-        && data.createdAt is timestamp;
+        && (data.salaryAmount is int || data.salaryAmount is float) && data.salaryAmount >= 0
+        && data.tutoringDays is list && data.tutoringDays.size() <= 10
+        && data.createdAt is timestamp
+        && (!data.keys().hasAny(['contactInfo']) || (data.contactInfo is string && data.contactInfo.size() <= 500))
+        && (!data.keys().hasAny(['progressNotes']) || (data.progressNotes is string && data.progressNotes.size() <= 5000));
     }
 
     // Attendance Collection
@@ -82,13 +84,14 @@ service cloud.firestore {
 
     function isValidAttendance(data) {
       return data.keys().hasAll(['id', 'studentId', 'date', 'status', 'tutorUid', 'createdAt'])
-        && data.keys().size() == 6
+        && data.keys().size() >= 6 && data.keys().size() <= 7
         && data.id is string && data.id.size() <= 128
         && data.studentId is string && data.studentId.size() <= 128
         && data.date is string && data.date.size() == 10
-        && data.status is string && (data.status == 'present' || data.status == 'absent' || data.status == 'late')
+        && data.status is string && (data.status == 'present' || data.status == 'absent' || data.status == 'holiday' || data.status == 'took_off' || data.status == 'gap_covered')
         && data.tutorUid is string && data.tutorUid.size() <= 128
-        && data.createdAt is timestamp;
+        && data.createdAt is timestamp
+        && (!data.keys().hasAny(['gapCoveredDate']) || (data.gapCoveredDate is string && data.gapCoveredDate.size() <= 128));
     }
 
     // Salaries/Payments Collection
@@ -102,15 +105,16 @@ service cloud.firestore {
 
     function isValidSalary(data) {
       return data.keys().hasAll(['id', 'studentId', 'month', 'amount', 'status', 'paidAt', 'tutorUid', 'parentEmail'])
-        && data.keys().size() == 8
+        && data.keys().size() >= 8 && data.keys().size() <= 9
         && data.id is string && data.id.size() <= 128
         && data.studentId is string && data.studentId.size() <= 128
         && data.month is string && data.month.size() == 7
-        && data.amount is int && data.amount >= 0
+        && (data.amount is int || data.amount is float) && data.amount >= 0
         && data.status is string && (data.status == 'paid' || data.status == 'pending')
         && (data.paidAt == null || data.paidAt is timestamp)
         && data.tutorUid is string && data.tutorUid.size() <= 128
-        && data.parentEmail is string && data.parentEmail.size() <= 128;
+        && data.parentEmail is string && data.parentEmail.size() <= 128
+        && (!data.keys().hasAny(['receivedDate']) || (data.receivedDate is string && data.receivedDate.size() <= 128));
     }
 
     // Tutor Profiles Collection
